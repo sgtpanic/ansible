@@ -31,6 +31,12 @@ options:
     description:
       - String. The value of the secret. Required when state is C(present).
     required: false
+  file:
+    description:
+      - Boolean. Set when data data is a file path.
+      - If I(true), the input string in data will be treated as a file path.
+    required: false
+    default: false
   labels:
     description:
       - "A map of key:value meta data, where both the I(key) and I(value) are expected to be a string."
@@ -135,6 +141,7 @@ secret_id:
 '''
 
 import hashlib
+import os
 
 try:
     from docker.errors import APIError
@@ -159,6 +166,7 @@ class SecretManager(DockerBaseClass):
         parameters = self.client.module.params
         self.name = parameters.get('name')
         self.state = parameters.get('state')
+        self.file = parameters.get('file')
         self.data = parameters.get('data')
         self.labels = parameters.get('labels')
         self.force = parameters.get('force')
@@ -195,6 +203,12 @@ class SecretManager(DockerBaseClass):
 
         try:
             if not self.check_mode:
+                try:
+                    if self.file:
+                        self.data = to_bytes(self.data, errors='surrogate_or_strict')
+                except FileNotFoundError as e:
+                    self.client.fail("File does not exist: %s" % to_native(e))
+
                 secret_id = self.client.create_secret(self.name, self.data, labels=labels)
         except APIError as exc:
             self.client.fail("Error creating secret: %s" % to_native(exc))
